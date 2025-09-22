@@ -5,7 +5,7 @@ var app = builder.Build();
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
-app.MapGet("/", () => Results.Ok(new { message = "Minha API .NET 8 rodando 11! TESTE (ok) DE FLUXO1" }));
+app.MapGet("/", () => Results.Ok(new { message = "Minha API .NET 8 rodando 11! TESTE (ok) DE FLUXO" }));
 
 // Endpoint para simular carga de CPU por 'ms' milissegundos (padrão: 300ms)
 app.MapGet("/cpu-burn", (int? ms) =>
