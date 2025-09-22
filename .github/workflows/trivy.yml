@@ -17,7 +17,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Cache do banco de CVEs do Trivy (acelera bastante)
+      # Cache do DB do Trivy (acelera execuções seguintes)
       - name: Cache Trivy DB
         uses: actions/cache@v4
         with:
@@ -38,45 +38,51 @@ jobs:
           trivy config --format sarif --output trivy-dockerfile.sarif Dockerfile || true
 
       - name: Upload SARIF (Dockerfile)
+        if: always()
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: trivy-dockerfile.sarif
+          category: trivy-dockerfile   # categoria única
 
-      # 2) Filesystem do repo → vulnerabilidades e segredos (onde aplicável)
+      # 2) Filesystem do repo → vuln/secret/misconfig → SARIF
       - name: Trivy Filesystem (repo)
         run: |
           trivy fs --scanners vuln,secret,misconfig \
             --format sarif --output trivy-fs.sarif . || true
 
       - name: Upload SARIF (Filesystem)
+        if: always()
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: trivy-fs.sarif
+          category: trivy-fs          # categoria única
 
-      # 3) Construir imagem para escanear (reutiliza seu Dockerfile)
+      # 3) Build da imagem local (para escanear CVEs na imagem)
       - name: Build image (local only)
         run: |
           IMAGE="ghcr.io/${{ github.repository_owner }}/minha-api:trivy-${{ github.sha }}"
           docker build -t "$IMAGE" .
 
-      # 3a) Image scan (CVEs) → SARIF
+      # 3a) Image scan (vuln/misconfig/secret) → SARIF
       - name: Trivy Image (vuln+misconfig+secret)
         id: trivy_image
-        continue-on-error: true   # sempre gerar relatório; gate virá depois
+        continue-on-error: true   # não interrompe antes do upload
         run: |
           IMAGE="ghcr.io/${{ github.repository_owner }}/minha-api:trivy-${{ github.sha }}"
           trivy image --scanners vuln,misconfig,secret \
             --severity HIGH,CRITICAL \
             --format sarif --output trivy-image.sarif "$IMAGE"
-          # resumão em texto (opcional)
+          # Resumo em texto (opcional)
           trivy image --scanners vuln --severity HIGH,CRITICAL --format table "$IMAGE" | tee trivy-image.txt
 
       - name: Upload SARIF (Image)
+        if: always()
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: trivy-image.sarif
+          category: trivy-image       # categoria única
 
-      # (Opcional) publicar resumo no Job
+      # (Opcional) resumo no Job
       - name: Summary (Image scan)
         if: always()
         run: |
@@ -86,10 +92,9 @@ jobs:
           cat trivy-image.txt >> $GITHUB_STEP_SUMMARY || true
           echo '```' >> $GITHUB_STEP_SUMMARY
 
-      # 4) Gate de PR (falhar somente em pull_request se houver HIGH/CRITICAL)
+      # 4) Gate de PR: falha somente em pull_request se houver HIGH/CRITICAL na imagem
       - name: Enforce on PRs (fail if HIGH/CRITICAL on image)
         if: ${{ github.event_name == 'pull_request' }}
         run: |
-          # Retorna código 1 se houver HIGH/CRITICAL
           IMAGE="ghcr.io/${{ github.repository_owner }}/minha-api:trivy-${{ github.sha }}"
           trivy image --scanners vuln --severity HIGH,CRITICAL --exit-code 1 "$IMAGE"
