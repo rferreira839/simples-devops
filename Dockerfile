@@ -13,7 +13,7 @@ COPY src/MinhaApi/ src/MinhaApi/
 RUN dotnet publish src/MinhaApi/MinhaApi.csproj -c Release -o /app/publish /p:UseAppHost=false
 
 # STAGE 2 — runtime (imagem menor, só para rodar)
-FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
 WORKDIR /app
 
 # Copia os artefatos publicados do stage build
