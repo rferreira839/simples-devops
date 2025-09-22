@@ -12,24 +12,39 @@ permissions:
 jobs:
   semgrep:
     runs-on: ubuntu-latest
-    # roda dentro da imagem oficial do semgrep
     container:
       image: semgrep/semgrep:latest
+
     steps:
       - uses: actions/checkout@v4
 
+      # 1) roda o semgrep e SEMPRE continua (para conseguirmos subir o SARIF)
       - name: Run Semgrep and produce SARIF
-        # --sarif imprime em stdout; redirecionamos para semgrep.sarif
-        run: semgrep ci --config "p/owasp-top-ten" --sarif > semgrep.sarif
+        id: run_semgrep
+        continue-on-error: true
+        run: |
+          # executa; se der exit 1 (findings blocking), capturamos esse código
+          set +e
+          semgrep ci --config "p/owasp-top-ten" --sarif > semgrep.sarif
+          EXIT_CODE=$?
+          echo "exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
+          set -e
         env:
           SEMGREP_DISABLE_VERSION_CHECK: "1"
-          # variáveis úteis para diffs/links no dashboard (opcional)
           SEMGREP_REPO_NAME: ${{ github.repository }}
           SEMGREP_REPO_URL: ${{ github.server_url }}/${{ github.repository }}
           SEMGREP_BRANCH: ${{ github.ref_name }}
           SEMGREP_COMMIT: ${{ github.sha }}
 
+      # 2) sobe o relatório para GitHub Security → Code scanning
       - name: Upload SARIF to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: semgrep.sarif
+
+      # 3) aplica o "gate": falha o job SOMENTE em PR se houver findings blocking
+      - name: Enforce on PRs (fail if blocking findings)
+        if: ${{ github.event_name == 'pull_request' && steps.run_semgrep.outputs.exit_code == '1' }}
+        run: |
+          echo "Semgrep encontrou findings bloqueantes neste PR." >&2
+          exit 1
