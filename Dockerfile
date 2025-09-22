@@ -1,5 +1,5 @@
 # STAGE 1 — build (usa o SDK do .NET, que tem o compilador)
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /src
 
 # Copia apenas o csproj primeiro para aproveitar cache de dependências
