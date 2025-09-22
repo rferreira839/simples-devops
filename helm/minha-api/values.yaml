@@ -1,6 +1,6 @@
 image:
   repository: ghcr.io/rferreira839/minha-api  # << usa a imagem local que você buildou
-  tag: "main-5aa0354"
+  tag: "main-d50ed39"
   pullPolicy: IfNotPresent
 
 replicaCount: 2
