@@ -5,20 +5,31 @@ on:
   push:
     branches: [ "main" ]
 
+permissions:
+  contents: read
+  security-events: write
+
 jobs:
   semgrep:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      security-events: write
+    # roda dentro da imagem oficial do semgrep
+    container:
+      image: semgrep/semgrep:latest
     steps:
       - uses: actions/checkout@v4
-      - uses: returntocorp/semgrep-action@v1
-        with:
-          config: >-
-            p/owasp-top-ten
-          generateSarif: true
-        continue-on-error: true
-      - uses: github/codeql-action/upload-sarif@v3
+
+      - name: Run Semgrep and produce SARIF
+        # --sarif imprime em stdout; redirecionamos para semgrep.sarif
+        run: semgrep ci --config "p/owasp-top-ten" --sarif > semgrep.sarif
+        env:
+          SEMGREP_DISABLE_VERSION_CHECK: "1"
+          # variáveis úteis para diffs/links no dashboard (opcional)
+          SEMGREP_REPO_NAME: ${{ github.repository }}
+          SEMGREP_REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+          SEMGREP_BRANCH: ${{ github.ref_name }}
+          SEMGREP_COMMIT: ${{ github.sha }}
+
+      - name: Upload SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: semgrep.sarif
