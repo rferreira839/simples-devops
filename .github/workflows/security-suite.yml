@@ -1,0 +1,30 @@
+name: Security Suite
+
+on:
+  pull_request:
+  push:
+    branches: [ "main" ]
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  codeql:
+    uses: rferreira839/security-workflows/.github/workflows/reusable-codeql.yml@v1
+
+  semgrep:
+    uses: rferreira839/security-workflows/.github/workflows/reusable-semgrep.yml@v1
+    with:
+      enforce_on_pr: true
+
+  gitleaks:
+    uses: rferreira839/security-workflows/.github/workflows/reusable-gitleaks.yml@v1
+    with:
+      enforce_on_pr: true
+
+  trivy:
+    uses: rferreira839/security-workflows/.github/workflows/reusable-trivy.yml@v1
+    with:
+      image_name: ghcr.io/${{ github.repository_owner }}/minha-api
+      enforce_on_pr: true
