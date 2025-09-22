@@ -20,6 +20,8 @@ spec:
             - containerPort: {{ .Values.service.targetPort }}
           env:
             {{- toYaml .Values.env | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
           readinessProbe:
             httpGet:
               path: /health
@@ -32,3 +34,4 @@ spec:
               port: {{ .Values.service.targetPort }}
             initialDelaySeconds: 10
             periodSeconds: 20
+          
