@@ -1,0 +1,61 @@
+name: CI-CD
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  build-test-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        run: dotnet restore src/MinhaApi/MinhaApi.csproj
+
+      - name: Build
+        run: dotnet build src/MinhaApi/MinhaApi.csproj --configuration Release --no-restore
+
+      - name: Test
+        run: |
+          echo "Sem testes ainda"
+
+      - name: Login GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Set image tag
+        id: vars
+        run: |
+          SHA=${GITHUB_SHA::7}
+          echo "tag=${{ github.ref_name }}-${SHA}" >> $GITHUB_OUTPUT
+
+      - name: Build & Push Image
+        run: |
+          IMAGE="ghcr.io/${{ github.repository_owner }}/minha-api:${{ steps.vars.outputs.tag }}"
+          docker build -t "$IMAGE" .
+          docker push "$IMAGE"
+          echo "IMAGE=$IMAGE" >> $GITHUB_ENV
+
+      - name: Update Helm values (image tag)
+        shell: bash
+        run: |
+          sed -i "s#^\(\s*tag:\s*\).*#\1\"${{ steps.vars.outputs.tag }}\"#g" helm/minha-api/values.yaml
+
+      - name: Commit chart bump
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@users.noreply.github.com"
+          git add helm/minha-api/values.yaml
+          git commit -m "chore: bump image tag to ${{ steps.vars.outputs.tag }}" || echo "no changes"
+          git push
