@@ -1,6 +1,6 @@
 image:
-  repository: minha-api   # << usa a imagem local que você buildou
-  tag: "local"
+  repository: ghcr.io/rferreira839/minha-api  # << usa a imagem local que você buildou
+  tag: "0.1.0"
   pullPolicy: IfNotPresent
 
 replicaCount: 2
