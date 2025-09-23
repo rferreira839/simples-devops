@@ -1,15 +1,12 @@
 image:
-  repository: ghcr.io/rferreira839/minha-api  # << usa a imagem local que você buildou
-  tag: "main-010ef3d"
+  repository: ghcr.io/rferreira839/minha-api # << usa a imagem local que você buildou
+  tag: "main-0f283d4"
   pullPolicy: IfNotPresent
-
 replicaCount: 2
-
 service:
   type: ClusterIP
   port: 80
   targetPort: 8080
-
 resources:
   requests:
     cpu: "50m"
@@ -17,19 +14,16 @@ resources:
   limits:
     cpu: "80m"
     memory: "256Mi"
-
 env: []
-
 ingress:
   enabled: true
   className: nginx
   host: minha-api.local
   path: /
-
 # helm/minha-api/values.yaml
 autoscaling:
   enabled: true
   minReplicas: 2
   maxReplicas: 5
-  targetCPUUtilizationPercentage: 70   # escala quando média de CPU > 70%
+  targetCPUUtilizationPercentage: 70 # escala quando média de CPU > 70%
   # targetMemoryUtilizationPercentage: 80  # opcional (se quiser por memória)
