@@ -4,25 +4,21 @@ metadata:
   name: minha-api
   namespace: argocd
   annotations:
-    # lista de imagens (apelido=imagem)
+    # monitora a imagem com alias "app"
     argocd-image-updater.argoproj.io/image-list: app=ghcr.io/rferreira839/minha-api
 
     # write-back direto no Argo (sem Git/PR)
     argocd-image-updater.argoproj.io/write-back-method: argocd
 
-    # mapeamento para Helm: onde estão repo/tag nos values
-    argocd-image-updater.argoproj.io/helm.image-name: image.repository
-    argocd-image-updater.argoproj.io/helm.image-tag: image.tag
+    # mapeamento HELM (por alias)
+    argocd-image-updater.argoproj.io/app.helm.image-name: image.repository
+    argocd-image-updater.argoproj.io/app.helm.image-tag: image.tag
 
-    # estratégia de atualização: use o "newest" (por data) ou "latest"
+    # estratégia de atualização
     argocd-image-updater.argoproj.io/app.update-strategy: newest
 
-    # use o secret para autenticar no GHCR (namespace/name)
-    argocd-image-updater.argoproj.io/pull-secret: pullsecret:argocd/ghcr-creds
-
-    # opcional: aplicar digest (segurança extra)
-    # argocd-image-updater.argoproj.io/app.write-back-target: helm
-    # argocd-image-updater.argoproj.io/app.update-strategy: digest
+    # secret para ler tags do GHCR (namespace/name)
+    argocd-image-updater.argoproj.io/app.pull-secret: pullsecret:argocd/ghcr-creds
 
 spec:
   project: default
@@ -34,7 +30,7 @@ spec:
       values: |
         image:
           repository: ghcr.io/rferreira839/minha-api
-          tag: "manual-se-pquiser"   # será sobrescrito pelo Image Updater
+          tag: "latest"   # o Image Updater manterá este valor atualizado
   destination:
     server: https://kubernetes.default.svc
     namespace: minha-api
