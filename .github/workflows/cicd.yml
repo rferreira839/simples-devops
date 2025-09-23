@@ -24,50 +24,89 @@ jobs:
           dotnet-version: '8.0.x'
 
       - name: Restore
-        run: dotnet restore src/MinhaApi/MinhaApi.csproj
+        run: |
+          dotnet restore src/MinhaApi/MinhaApi.csproj
 
       - name: Build
-        run: dotnet build src/MinhaApi/MinhaApi.csproj --configuration Release --no-restore
+        run: |
+          dotnet build src/MinhaApi/MinhaApi.csproj --configuration Release --no-restore
 
       - name: Test
-        run: echo "Sem testes ainda"
+        run: |
+          echo "Sem testes ainda"
 
       - name: Login GHCR
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
+      # Define a tag e exporta para outputs e para o ambiente
       - name: Set image tag
         id: vars
         run: |
           SHA=${GITHUB_SHA::7}
-          echo "tag=${{ github.ref_name }}-${SHA}" >> $GITHUB_OUTPUT
+          TAG="${GITHUB_REF_NAME}-${SHA}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "IMAGE_TAG=${TAG}" >> "$GITHUB_ENV"
+
+      - name: Echo tag calculada
+        run: |
+          echo "Tag de imagem: $IMAGE_TAG"
 
       - name: Build & Push Image
+        env:
+          IMAGE_TAG: ${{ env.IMAGE_TAG }}
         run: |
-          IMAGE="ghcr.io/${{ github.repository_owner }}/minha-api:${{ steps.vars.outputs.tag }}"
+          IMAGE="ghcr.io/${{ github.repository_owner }}/minha-api:${IMAGE_TAG}"
           docker build -t "$IMAGE" .
           docker push "$IMAGE"
           echo "IMAGE=$IMAGE" >> $GITHUB_ENV
+          echo "Imagem publicada: $IMAGE"
 
-      - name: Update Helm values (image tag)
-        shell: bash
+      # Atualiza o values.yaml com yq (via variável de ambiente)
+      - name: Update Helm values (image tag) with yq
+        uses: mikefarah/yq@v4
+        env:
+          TAG: ${{ env.IMAGE_TAG }}
+        with:
+          cmd: yq -i '.image.tag = strenv(TAG)' helm/minha-api/values.yaml
+
+      # Se não houve mudança real, não abre PR
+      - name: Check diff for values.yaml
+        id: check_diff
         run: |
-          sed -i "s#^\(\s*tag:\s*\).*#\1\"${{ steps.vars.outputs.tag }}\"#g" helm/minha-api/values.yaml
+          if git diff --quiet -- helm/minha-api/values.yaml; then
+            echo "no_changes=true" >> "$GITHUB_OUTPUT"
+            echo "Nenhuma alteração em helm/minha-api/values.yaml"
+          else
+            echo "no_changes=false" >> "$GITHUB_OUTPUT"
+            echo "Diferenças detectadas em helm/minha-api/values.yaml"
+          fi
 
-      # Faz o commit local (sem push)
+      # Faz o commit local (sem push) somente se houve mudança
       - name: Commit chart bump (local only)
+        if: ${{ steps.check_diff.outputs.no_changes == 'false' }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add helm/minha-api/values.yaml
-          git commit -m "chore: bump image tag to ${{ steps.vars.outputs.tag }}" || echo "no changes"
+          git commit -m "chore: bump image tag to $IMAGE_TAG" || echo "no changes"
 
-      # Abre PR automático com essa alteração (em vez de push na main)
+      # Abre PR automático somente se houve mudança
       - name: Open PR with chart bump
+        if: ${{ steps.check_diff.outputs.no_changes == 'false' }}
+        id: cpr
         uses: peter-evans/create-pull-request@v6
         with:
+          base: main
           branch: ci/chart-bump-${{ github.sha }}
           delete-branch: true
-          title: "chore: bump image tag to ${{ steps.vars.outputs.tag }}"
+          title: "chore: bump image tag to ${{ env.IMAGE_TAG }}"
           body: "Auto bump from CI."
-          commit-message: "chore: bump image tag to ${{ steps.vars.outputs.tag }}"
+          commit-message: "chore: bump image tag to ${{ env.IMAGE_TAG }}"
           labels: ci, chart-bump
+
+      # Mostra o link do PR criado (usa colchetes por causa do hífen na chave)
+      - name: Show PR URL (if created)
+        if: ${{ steps.cpr.outputs['pull-request-url'] != '' }}
+        run: |
+          echo "PR criado: ${{ steps.cpr.outputs['pull-request-url'] }}"
