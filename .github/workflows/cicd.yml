@@ -24,16 +24,20 @@ jobs:
           dotnet-version: '8.0.x'
 
       - name: Restore
-        run: dotnet restore src/MinhaApi/MinhaApi.csproj
+        run: |
+          dotnet restore src/MinhaApi/MinhaApi.csproj
 
       - name: Build
-        run: dotnet build src/MinhaApi/MinhaApi.csproj --configuration Release --no-restore
+        run: |
+          dotnet build src/MinhaApi/MinhaApi.csproj --configuration Release --no-restore
 
       - name: Test
-        run: echo "Sem testes ainda"
+        run: |
+          echo "Sem testes ainda"
 
       - name: Login GHCR
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
       # Define a tag e exporta para outputs e para o ambiente
       - name: Set image tag
@@ -67,7 +71,7 @@ jobs:
           cmd: yq -i '.image.tag = strenv(TAG)' helm/minha-api/values.yaml
 
       # Se não houve mudança real, não abre PR
-      - name: Skip bump if no changes
+      - name: Check diff for values.yaml
         id: check_diff
         run: |
           if git diff --quiet -- helm/minha-api/values.yaml; then
@@ -101,7 +105,8 @@ jobs:
           commit-message: "chore: bump image tag to ${{ env.IMAGE_TAG }}"
           labels: ci, chart-bump
 
-      # Mostra o link do PR criado (se existir)
+      # Mostra o link do PR criado (usa colchetes por causa do hífen na chave)
       - name: Show PR URL (if created)
-        if: ${{ steps.cpr.outputs.pull-request-url != '' }}
-        run: echo "PR criado: ${{ steps.cpr.outputs['pull-request-url'] }}"
+        if: ${{ steps.cpr.outputs['pull-request-url'] != '' }}
+        run: |
+          echo "PR criado: ${{ steps.cpr.outputs['pull-request-url'] }}"
