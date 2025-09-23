@@ -70,7 +70,7 @@ jobs:
         with:
           cmd: yq -i '.image.tag = strenv(TAG)' helm/minha-api/values.yaml
 
-      # Checa se houve mudança real
+      # Checa se houve mudança real (opcional; ajuda a evitar PR vazio)
       - name: Check diff for values.yaml
         id: check_diff
         run: |
@@ -82,43 +82,27 @@ jobs:
             echo "Diferenças detectadas em helm/minha-api/values.yaml"
           fi
 
-      # Debug: mostra diff e status quando houver mudança
-      - name: Show pending diff
-        if: ${{ steps.check_diff.outputs.no_changes == 'false' }}
-        run: |
-          echo "----- git status -----"
-          git status --porcelain=1
-          echo "----- git diff (values.yaml) -----"
-          git --no-pager diff -- helm/minha-api/values.yaml || true
-
-      # Faz o commit local (sem push) somente se houve mudança
-      - name: Commit chart bump (local only)
-        if: ${{ steps.check_diff.outputs.no_changes == 'false' }}
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add helm/minha-api/values.yaml
-          git commit -m "chore: bump image tag to $IMAGE_TAG" || echo "no changes"
-
-      # Abre PR automático somente se houve mudança
+      # Abra o PR sem fazer commit manual: a action adiciona e commita 'add-paths'
       - name: Open PR with chart bump
         if: ${{ steps.check_diff.outputs.no_changes == 'false' }}
         id: cpr
         uses: peter-evans/create-pull-request@v6
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}      # usa o token do workflow
+          token: ${{ secrets.GITHUB_TOKEN }}
           base: main
-          branch: ci/chart-bump                   # nome base
-          branch-suffix: short-commit-hash        # evita colisão em reexecuções
+          branch: ci/chart-bump               # nome base fixo
+          branch-suffix: short-commit-hash    # evita colisões (gera ci/chart-bump-<hash-curto>)
           delete-branch: true
           title: "chore: bump image tag to ${{ env.IMAGE_TAG }}"
           body: "Auto bump from CI."
           commit-message: "chore: bump image tag to ${{ env.IMAGE_TAG }}"
           labels: ci, chart-bump
+          add-paths: |                        # << AQUI: a action vai adicionar/commitar esse arquivo
+            helm/minha-api/values.yaml
 
-      # Mostra os outputs do create-pull-request, mesmo se vazios
+      # Mostra os outputs do create-pull-request
       - name: Show PR outputs
-        if: ${{ always() }}
+        if: ${{ steps.cpr.outcome == 'success' }}
         run: |
           echo "operation: ${{ steps.cpr.outputs['pull-request-operation'] }}"
           echo "number:    ${{ steps.cpr.outputs['pull-request-number'] }}"
