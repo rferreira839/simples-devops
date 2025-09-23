@@ -6,16 +6,17 @@ on:
   workflow_dispatch: {}
 
 permissions:
-  contents: write
-  pull-requests: write 
-  packages: write
+  contents: write        # criar branch/commit
+  pull-requests: write   # abrir PR
+  packages: write        # push da imagem no GHCR
 
 jobs:
   build-test-publish:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
       - name: Setup .NET 8
         uses: actions/setup-dotnet@v5
@@ -29,8 +30,7 @@ jobs:
         run: dotnet build src/MinhaApi/MinhaApi.csproj --configuration Release --no-restore
 
       - name: Test
-        run: |
-          echo "Sem testes ainda"
+        run: echo "Sem testes ainda"
 
       - name: Login GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
@@ -53,19 +53,21 @@ jobs:
         run: |
           sed -i "s#^\(\s*tag:\s*\).*#\1\"${{ steps.vars.outputs.tag }}\"#g" helm/minha-api/values.yaml
 
-      - name: Commit chart bump (no local)
+      # Faz o commit local (sem push)
+      - name: Commit chart bump (local only)
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add helm/minha-api/values.yaml
-          git commit -m "chore: bump image tag to ${{ steps.meta.outputs.tag }}" || echo "no changes"
-      
+          git commit -m "chore: bump image tag to ${{ steps.vars.outputs.tag }}" || echo "no changes"
+
+      # Abre PR automático com essa alteração (em vez de push na main)
       - name: Open PR with chart bump
         uses: peter-evans/create-pull-request@v6
         with:
-          branch: ci/chart-bump-${{ github.sha }}        # branch temporária criada pelo bot
+          branch: ci/chart-bump-${{ github.sha }}
           delete-branch: true
-          title: "chore: bump image tag to ${{ steps.meta.outputs.tag }}"
+          title: "chore: bump image tag to ${{ steps.vars.outputs.tag }}"
           body: "Auto bump from CI."
-          commit-message: "chore: bump image tag to ${{ steps.meta.outputs.tag }}"
+          commit-message: "chore: bump image tag to ${{ steps.vars.outputs.tag }}"
           labels: ci, chart-bump
