@@ -23,7 +23,7 @@ jobs:
       enforce_on_pr: true
 
   gitleaks:
-    uses: rferreira839/security-workflows/.github/workflows/reusable-gitleaks.yml@v1.2
+    uses: rferreira839/security-workflows/.github/workflows/reusable-gitleaks.yml@main
     with:
       enforce_on_pr: true
 
