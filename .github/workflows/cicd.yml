@@ -100,7 +100,7 @@ jobs:
           add-paths: |                        # << AQUI: a action vai adicionar/commitar esse arquivo
             helm/minha-api/values.yaml
 
-      # Mostra os outputs do create-pull-request
+      # Mostra os outputs do create-pull-request1
       - name: Show PR outputs
         if: ${{ steps.cpr.outcome == 'success' }}
         run: |
