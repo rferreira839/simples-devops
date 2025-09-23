@@ -6,104 +6,40 @@ on:
   workflow_dispatch: {}
 
 permissions:
-  contents: write        # criar branch/commit
-  pull-requests: write   # abrir PR
-  packages: write        # push da imagem no GHCR
+  contents: read
+  packages: write
 
 jobs:
-  build-test-publish:
+  build-and-push:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup .NET 8
-        uses: actions/setup-dotnet@v5
+      - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '8.0.x'
 
       - name: Restore
-        run: |
-          dotnet restore src/MinhaApi/MinhaApi.csproj
+        run: dotnet restore src/MinhaApi/MinhaApi.csproj
 
       - name: Build
-        run: |
-          dotnet build src/MinhaApi/MinhaApi.csproj --configuration Release --no-restore
-
-      - name: Test
-        run: |
-          echo "Sem testes ainda"
+        run: dotnet build src/MinhaApi/MinhaApi.csproj --configuration Release --no-restore
 
       - name: Login GHCR
-        run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-      # Define a tag e exporta para outputs e para o ambiente
       - name: Set image tag
         id: vars
         run: |
           SHA=${GITHUB_SHA::7}
           TAG="${GITHUB_REF_NAME}-${SHA}"
-          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "IMAGE_TAG=${TAG}" >> "$GITHUB_ENV"
 
-      - name: Echo tag calculada
-        run: |
-          echo "Tag de imagem: $IMAGE_TAG"
-
-      - name: Build & Push Image
-        env:
-          IMAGE_TAG: ${{ env.IMAGE_TAG }}
+      - name: Build & Push Image (by tag + latest)
         run: |
           IMAGE="ghcr.io/${{ github.repository_owner }}/minha-api:${IMAGE_TAG}"
-          docker build -t "$IMAGE" .
+          LATEST="ghcr.io/${{ github.repository_owner }}/minha-api:latest"
+          docker build -t "$IMAGE" -t "$LATEST" .
           docker push "$IMAGE"
-          echo "IMAGE=$IMAGE" >> $GITHUB_ENV
-          echo "Imagem publicada: $IMAGE"
-
-      # Atualiza o values.yaml com yq (via variável de ambiente)
-      - name: Update Helm values (image tag) with yq
-        uses: mikefarah/yq@v4
-        env:
-          TAG: ${{ env.IMAGE_TAG }}
-        with:
-          cmd: yq -i '.image.tag = strenv(TAG)' helm/minha-api/values.yaml
-
-      # Checa se houve mudança real (opcional; ajuda a evitar PR vazio)
-      - name: Check diff for values.yaml
-        id: check_diff
-        run: |
-          if git diff --quiet -- helm/minha-api/values.yaml; then
-            echo "no_changes=true" >> "$GITHUB_OUTPUT"
-            echo "Nenhuma alteração em helm/minha-api/values.yaml"
-          else
-            echo "no_changes=false" >> "$GITHUB_OUTPUT"
-            echo "Diferenças detectadas em helm/minha-api/values.yaml"
-          fi
-
-      # Abra o PR sem fazer commit manual: a action adiciona e commita 'add-paths'
-      - name: Open PR with chart bump
-        if: ${{ steps.check_diff.outputs.no_changes == 'false' }}
-        id: cpr
-        uses: peter-evans/create-pull-request@v6
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          base: main
-          branch: ci/chart-bump               # nome base fixo
-          branch-suffix: short-commit-hash    # evita colisões (gera ci/chart-bump-<hash-curto>)
-          delete-branch: true
-          title: "chore: bump image tag to ${{ env.IMAGE_TAG }}"
-          body: "Auto bump from CI."
-          commit-message: "chore: bump image tag to ${{ env.IMAGE_TAG }}"
-          labels: ci, chart-bump
-          add-paths: |                        # << AQUI: a action vai adicionar/commitar esse arquivo
-            helm/minha-api/values.yaml
-
-      # Mostra os outputs do create-pull-request1
-      - name: Show PR outputs
-        if: ${{ steps.cpr.outcome == 'success' }}
-        run: |
-          echo "operation: ${{ steps.cpr.outputs['pull-request-operation'] }}"
-          echo "number:    ${{ steps.cpr.outputs['pull-request-number'] }}"
-          echo "url:       ${{ steps.cpr.outputs['pull-request-url'] }}"
+          docker push "$LATEST"
+          echo "Imagems publicadas: $IMAGE e $LATEST"
