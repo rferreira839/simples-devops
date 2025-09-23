@@ -70,7 +70,7 @@ jobs:
         with:
           cmd: yq -i '.image.tag = strenv(TAG)' helm/minha-api/values.yaml
 
-      # Se não houve mudança real, não abre PR
+      # Checa se houve mudança real
       - name: Check diff for values.yaml
         id: check_diff
         run: |
@@ -81,6 +81,15 @@ jobs:
             echo "no_changes=false" >> "$GITHUB_OUTPUT"
             echo "Diferenças detectadas em helm/minha-api/values.yaml"
           fi
+
+      # Debug: mostra diff e status quando houver mudança
+      - name: Show pending diff
+        if: ${{ steps.check_diff.outputs.no_changes == 'false' }}
+        run: |
+          echo "----- git status -----"
+          git status --porcelain=1
+          echo "----- git diff (values.yaml) -----"
+          git --no-pager diff -- helm/minha-api/values.yaml || true
 
       # Faz o commit local (sem push) somente se houve mudança
       - name: Commit chart bump (local only)
@@ -97,16 +106,20 @@ jobs:
         id: cpr
         uses: peter-evans/create-pull-request@v6
         with:
+          token: ${{ secrets.GITHUB_TOKEN }}      # usa o token do workflow
           base: main
-          branch: ci/chart-bump-${{ github.sha }}
+          branch: ci/chart-bump                   # nome base
+          branch-suffix: short-commit-hash        # evita colisão em reexecuções
           delete-branch: true
           title: "chore: bump image tag to ${{ env.IMAGE_TAG }}"
           body: "Auto bump from CI."
           commit-message: "chore: bump image tag to ${{ env.IMAGE_TAG }}"
           labels: ci, chart-bump
 
-      # Mostra o link do PR criado (usa colchetes por causa do hífen na chave)
-      - name: Show PR URL (if created)
-        if: ${{ steps.cpr.outputs['pull-request-url'] != '' }}
+      # Mostra os outputs do create-pull-request, mesmo se vazios
+      - name: Show PR outputs
+        if: ${{ always() }}
         run: |
-          echo "PR criado: ${{ steps.cpr.outputs['pull-request-url'] }}"
+          echo "operation: ${{ steps.cpr.outputs['pull-request-operation'] }}"
+          echo "number:    ${{ steps.cpr.outputs['pull-request-number'] }}"
+          echo "url:       ${{ steps.cpr.outputs['pull-request-url'] }}"
